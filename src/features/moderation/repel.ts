@@ -109,11 +109,11 @@ const sendReasonToTarget = async ({
   target: GuildMember | User;
   reason: string;
   guildName: string;
-  timeoutDuration?: number;
+  timeoutDuration: number;
 }): Promise<boolean> => {
   const parts: string[] = [];
   parts.push(`You have been repelled from **${guildName}**.`);
-  if (timeoutDuration && timeoutDuration > 0) {
+  if (timeoutDuration > 0) {
     parts.push(`You have been timed out for ${timeToString(timeoutDuration)}.`);
   }
   parts.push(`**Reason:** ${reason}`);
@@ -154,6 +154,10 @@ const getTargetFromInteraction = async (
   }
   return target;
 };
+type TimeoutReason = {
+  reason?: string;
+  durationInMs: number;
+};
 
 const handleTimeout = async ({
   target,
@@ -161,20 +165,22 @@ const handleTimeout = async ({
 }: {
   target: GuildMember | User;
   durationInMilliseconds: number;
-}): Promise<number> => {
-  if (
-    durationInMilliseconds === 0 ||
-    !isUserInServer(target) ||
-    isUserTimedOut(target)
-  ) {
-    return 0;
+}): Promise<TimeoutReason> => {
+  if (durationInMilliseconds === 0) {
+    return { durationInMs: 0 };
+  }
+  if (!isUserInServer(target)) {
+    return { durationInMs: 0, reason: 'Target is no longer in server' };
+  }
+  if (isUserTimedOut(target)) {
+    return { durationInMs: 0, reason: 'Target is already timed out' };
   }
   try {
     await target.timeout(durationInMilliseconds, 'Repel command executed');
-    return durationInMilliseconds;
+    return { durationInMs: durationInMilliseconds };
   } catch (error) {
     console.error('Error applying timeout to user:', error);
-    return 0;
+    return { durationInMs: 0 };
   }
 };
 
@@ -275,7 +281,7 @@ const logRepelAction = async ({
   interaction,
   member,
   target,
-  duration,
+  timeoutReason,
   deleteCount,
   reason,
   failedChannels,
@@ -285,7 +291,7 @@ const logRepelAction = async ({
   member: GuildMember;
   target: User | GuildMember;
   reason: string;
-  duration?: number;
+  timeoutReason: TimeoutReason;
   deleteCount: number;
   failedChannels: string[];
   dm: {
@@ -342,7 +348,9 @@ const logRepelAction = async ({
       },
       {
         name: 'Timeout Duration',
-        value: duration ? `${timeToString(duration)}` : 'No Timeout',
+        value: timeoutReason.reason
+          ? timeoutReason.reason
+          : `${timeToString(timeoutReason.durationInMs)}`,
         inline: true,
       }
     )
@@ -543,7 +551,7 @@ export const repelCommand = createSlashCommand({
           target,
           reason,
           guildName: interaction.guild.name,
-          timeoutDuration: timeout,
+          timeoutDuration: timeout.durationInMs,
         });
       }
 
@@ -552,7 +560,7 @@ export const repelCommand = createSlashCommand({
         member: commandUser,
         target,
         reason,
-        duration: timeout,
+        timeoutReason: timeout,
         deleteCount: deleted,
         failedChannels,
         dm: {
