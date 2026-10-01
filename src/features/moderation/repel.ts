@@ -167,7 +167,7 @@ const handleTimeout = async ({
   durationInMilliseconds: number;
 }): Promise<TimeoutReason> => {
   if (durationInMilliseconds === 0) {
-    return { durationInMs: 0 };
+    return { durationInMs: 0, reason: 'No Timeout' };
   }
   if (!isUserInServer(target)) {
     return { durationInMs: 0, reason: 'Target is no longer in server' };
